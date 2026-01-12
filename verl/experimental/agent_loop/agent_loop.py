@@ -940,6 +940,8 @@ class AgentLoopManager:
             self.reward_model_manager.wake_up()
 
         chunkes = prompts.chunk(len(self.agent_loop_workers))
+        # breakpoint()
+        # import ipdb; ipdb.set_trace()
         outputs = ray.get(
             [
                 worker.generate_sequences.remote(chunk)
