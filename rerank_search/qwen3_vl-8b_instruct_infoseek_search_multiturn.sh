@@ -17,6 +17,12 @@ CHAT_TEMPLATE_PATH="$PROJECT_DIR/rerank_search/config/qwen_vl_custom_tool_chat_t
 [[ -s "$CHAT_TEMPLATE_PATH" ]] || { echo "Missing/empty chat template: $CHAT_TEMPLATE_PATH" >&2; exit 1; }
 HF_MODEL_PATH=${HF_MODEL_PATH:-"/mnt/sh/mmvision/share/pretrained_models/Qwen3-VL-8B-Instruct"}
 Experiment_name="qwen3-vl-8b-instruct_async-sgl-infoseek-text-search-multiturn-3-grpo"
+
+# log to both console and file (realtime)
+mkdir -p ./logs
+LOG_FILE="./logs/${Experiment_name}.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+export PYTHONUNBUFFERED=1
 # wandb api key
 export WANDB_API_KEY=2ba0887d400849bdd96a2ad62fc5acf55947fe79
 # proxy
@@ -27,7 +33,7 @@ export https_proxy=http://9.131.113.25:11113
 # export RAY_DEBUG=1
 # export HYDRA_FULL_ERROR=1
 
-python3 -m verl.trainer.main_ppo \
+python3 -u -m verl.trainer.main_ppo \
     --config-path="$CONFIG_PATH" \
     --config-name='search_multiturn_grpo' \
     algorithm.adv_estimator=grpo \
@@ -69,7 +75,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=sglang \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.disable_mm_preprocessor_cache=True \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
     actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.multi_turn.max_assistant_turns=3 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=8 \
@@ -86,7 +92,5 @@ python3 -m verl.trainer.main_ppo \
     trainer.test_freq=20 \
     trainer.max_actor_ckpt_to_keep=1 \
     actor_rollout_ref.rollout.multi_turn.tool_config_path="$TOOL_CONFIG" \
-    trainer.total_epochs=2 $@ 
-    
-# > ./logs/${Experiment_name}.log 2>&1 < /dev/null
+    trainer.total_epochs=2 "$@"
 

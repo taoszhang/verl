@@ -41,7 +41,7 @@ def format_reward(response: str) -> float:
 
 def tool_call_reward(response: str) -> float:
     try:
-        tool_call_match = re.search(r"<tool_call>(.*?)</tool_call>", response)
+        tool_call_match = re.search(r"<tool_call>(.*?)</tool_call>", response, re.DOTALL)
         tool_call_predict = tool_call_match.group(1).strip() if tool_call_match else ''
         if tool_call_predict.strip().lower() != '':
             return 1.0
@@ -261,8 +261,8 @@ def compute_score(data_source, solution_str, ground_truth, extra_info=None, **kw
         raise ValueError(f"Invalid data type: {data_type}")
 
     format_score = format_reward(response)
-    overall_score = 0.5 * accuracy_score + 0.5 * format_score
     tool_call_score = tool_call_reward(response)
+    overall_score = 0.5 * accuracy_score + 0.5 * format_score
     # NaiveRewardManager expects key "score" if returning dict.
     return {
         "score": float(overall_score),

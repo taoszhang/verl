@@ -41,7 +41,7 @@ def format_reward(response: str) -> float:
 
 def tool_call_reward(response: str) -> float:
     try:
-        tool_call_match = re.search(r"<search_call>(.*?)</search_call>", response)
+        tool_call_match = re.search(r"<search_call>(.*?)</search_call>", response, re.DOTALL)
         tool_call_predict = tool_call_match.group(1).strip() if tool_call_match else ''
         if tool_call_predict.strip().lower() != '':
             return 1.0
@@ -230,17 +230,9 @@ def string_accuracy_reward(predict_str: str, ground_truth: list[str]) -> float:
 def compute_score(data_source, solution_str, ground_truth, extra_info=None, **kwargs):
     # breakpoint()
     extra_info = extra_info or {}
-
-    # Some datasets may wrap the actual dict under {"ground_truth": {...}}.
-    gt = ground_truth
-    if isinstance(gt, dict) and isinstance(gt.get("ground_truth", None), dict):
-        gt = gt["ground_truth"]
-
     response = solution_str
-
     data_type = ground_truth["data_type"]
     answers = ground_truth["answer"]
-
     if data_type == "string":
         accuracy_score = string_accuracy_reward(response, answers)
     elif data_type == "numerical":
@@ -249,8 +241,8 @@ def compute_score(data_source, solution_str, ground_truth, extra_info=None, **kw
         raise ValueError(f"Invalid data type: {data_type}")
 
     format_score = format_reward(response)
-    overall_score = 0.5 * accuracy_score + 0.5 * format_score
     tool_call_score = tool_call_reward(response)
+    overall_score = 0.5 * accuracy_score + 0.5 * format_score
     # NaiveRewardManager expects key "score" if returning dict.
     return {
         "score": float(overall_score),
@@ -258,3 +250,37 @@ def compute_score(data_source, solution_str, ground_truth, extra_info=None, **kw
         "tool_call": float(tool_call_score),
         "accuracy": float(accuracy_score),
     }
+
+if __name__ == "__main__":
+    data_source = "searchR1_infoseek"
+    solution_str = """<reason>
+        The question asks who "found" the Castle of Óbidos. This is a historical structure, and "found" likely refers to its original builders or the people responsible for its construction. The Castle of Óbidos is a medieval castle located in Portugal, and its origins date back to the early Middle Ages. It was likely built by the Romans or early Christian kingdoms in the region, but more specifically, it was constructed by the Portuguese nobility during the 11th and 12th centuries to defend against Moorish invasions.
+
+        To confirm the exact builders or the historical context, I will search for information about the construction of the Castle of Óbidos.
+        </reason>
+        <search_call>
+        {"name": "search", "arguments": {"query_list": ["who built the Castle of Óbidos Portugal", "history of Castle of Óbidos construction"]}}
+        </search_call>user
+        <search_response>
+
+        {"result": "Doc 1 (Title: Castle of Óbidos)\nThe Castle of Óbidos () is a well-preserved medieval castle located in the civil parish of Santa Maria, São Pedro e Sobral da Lagoa, in the municipality of Óbidos, Portuguese District of Leiria.## History.Óbidos had its foundation in the existence of a fortified settlement, likely over the Luso-Roman castro and Roman oppidum (then civitas) on the hilltop, that was the mysterious \"Eburobrittium\", once cited by Pliny the Elder as being situated between \"Collipo\" (present-day Golpilheira near Leiria) and \"Olisipo\" (Lisbon). Archeological surveys later resulted in the discovery of a forum, baths and other Roman structures near the settlement. The area was later settled by the Lusitanos (since the 4th century BC) and Romans in the first century, but later occupied by Visigoths during the 5th\n\nDoc 2 (Title: Castle of Óbidos)\nJoão Gonçalves, in the Battle of Aljubarrota.A settlement started building to the west and southern part of the cas...(truncated)...ettlement. The area was later settled by the Lusitanos (since the 4th century BC) and Romans in the first century, but later occupied by Visigoths during the 5th\n\nDoc 3 (Title: Castle of Óbidos)\n( the \"Torre de D. Fernando\" or D. Fernando Tower) constructed by the Queen. As part of the construction, a connection was made between the dungeons and the Church of Santiago gallery.During the context of the 1383–1385 Portuguese succession crises, the alcalde (against the wishes of its residents) allied with John I of Castile, resulting in an assault by the forces loyal to the Master of Avis (future King John). Óbidos and its castle were transferred to John (following his election by the Cortes in Coimbra as King) by Vasco Gonçalves Teixeira, following the death of his father and former-alcalde, João Gonçalves, in the Battle of Aljubarrota.A settlement started building to the west and southern part of the castle within the walls sometime in the 15th century. During the reign of King D."}
+
+        </search_response>
+        assistant
+        <reason>
+        From the search results, it is clear that the Castle of Óbidos has a long and layered history. The earliest foundations of the site date back to the Roman period, with evidence of a Roman settlement called "Eburobrittium" on the hilltop. The area was later occupied by the Lusitanians and Romans, and later by the Visigoths. However, the castle as a fortified medieval structure was likely built by the Portuguese nobility during the 11th and 12th centuries to defend against Moorish invasions.
+
+        The search results also mention that during the 1383–1385 Portuguese succession crisis, the castle was transferred to King John I of Portugal, but this refers to a later political event, not its original construction. The castle's construction was likely initiated by local Portuguese nobles or rulers during the medieval period, but the exact individual or group responsible for its initial building is not explicitly mentioned in the results.
+
+        Therefore, the castle was not "found" by a single person or group, but rather constructed over time by various groups, starting with the Romans and later by the Portuguese nobility during the medieval period.
+        </reason>
+        <answer>
+        The Castle of Óbidos was not "found" by a single person or group, but rather constructed over time. Its earliest foundations date back to the Roman period, with a settlement called "Eburobrittium."
+    """
+    ground_truth = {
+        "data_type": "string",
+        "answer": ["Afonso Henriques", "O fundador", "O conquistador", "O grande", "Afonso I of Portugal"],
+        "entity": "Castle of Óbidos",
+    }
+
+    print(compute_score(data_source, solution_str, ground_truth))

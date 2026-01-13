@@ -11,7 +11,7 @@ export NCCL_SOCKET_NTHREADS=4
 export NCCL_NSOCKS_PERTHREAD=4
 export NCCL_IB_QPS_PER_CONNECTION=4
 export GLOO_SOCKET_IFNAME=bond1
-export CUDA_LAUNCH_BLOCKING=1
+# export CUDA_LAUNCH_BLOCKING=1
 export NCCL_DEBUG=INFO
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:8192
 export DISABLE_VERSION_CHECK=1
@@ -29,7 +29,7 @@ TOOL_CONFIG="$CONFIG_PATH/search_tool_config.yaml"
 CHAT_TEMPLATE_PATH="$PROJECT_DIR/rerank_search/config/qwen_vl_custom_tool_chat_template.jinja2"
 [[ -s "$CHAT_TEMPLATE_PATH" ]] || { echo "Missing/empty chat template: $CHAT_TEMPLATE_PATH" >&2; exit 1; }
 HF_MODEL_PATH=${HF_MODEL_PATH:-"/mnt/sh/mmvision/share/pretrained_models/Qwen3-VL-8B-Instruct"}
-Experiment_name="qwen3-vl-8b-instruct_async-sgl-infoseek-text-search-multiturn-3-grpo-4nodes"
+Experiment_name="qwen3-vl-8b-instruct_async-sgl-infoseek-text-search-multiturn-2-grpo-nodes-4"
 # wandb api key
 export WANDB_API_KEY=2ba0887d400849bdd96a2ad62fc5acf55947fe79
 # proxy
@@ -80,7 +80,7 @@ python3 -m verl.trainer.main_ppo \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.disable_mm_preprocessor_cache=True \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
     actor_rollout_ref.rollout.n=8 \
-    actor_rollout_ref.rollout.multi_turn.max_assistant_turns=3 \
+    actor_rollout_ref.rollout.multi_turn.max_assistant_turns=2 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=8 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.use_kl_in_reward=False \

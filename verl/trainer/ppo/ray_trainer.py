@@ -510,7 +510,7 @@ class RayPPOTrainer:
                 dump_path=rollout_data_dir,
             )
 
-    def _maybe_log_val_generations(self, inputs, outputs, scores):
+    def _maybe_log_val_generations(self, inputs, outputs, scores, gts):
         """Log a table of validation samples to the configured logger (wandb or swanlab)"""
 
         generations_to_log = self.config.trainer.log_val_generations
@@ -520,8 +520,8 @@ class RayPPOTrainer:
 
         import numpy as np
 
-        # Create tuples of (input, output, score) and sort by input text
-        samples = list(zip(inputs, outputs, scores, strict=True))
+        # Create tuples of (input, output, ground_truth, score) and sort by input text
+        samples = list(zip(inputs, outputs, gts, scores, strict=True))
         samples.sort(key=lambda x: x[0])  # Sort by input text
 
         # Use fixed random seed for deterministic shuffling
@@ -716,7 +716,7 @@ class RayPPOTrainer:
 
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
 
-        self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
+        self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores, gts=sample_gts)
 
         # dump generations
         val_data_dir = self.config.trainer.get("validation_data_dir", None)
@@ -1720,11 +1720,16 @@ class RayPPOTrainer:
                 # log reward extra info metrics (e.g., format, tool_call, accuracy from compute_score)
                 if reward_extra_infos_dict:
                     for key, values in reward_extra_infos_dict.items():
-                        if values and isinstance(values[0], (int, float)):
-                            values_arr = np.array(values)
-                            metrics[f"reward_extra/{key}/mean"] = float(np.mean(values_arr))
-                            metrics[f"reward_extra/{key}/max"] = float(np.max(values_arr))
-                            metrics[f"reward_extra/{key}/min"] = float(np.min(values_arr))
+                        # Convert to numpy array and check if it contains numeric data
+                        try:
+                            values_arr = np.asarray(values)
+                            if values_arr.size > 0 and np.issubdtype(values_arr.dtype, np.number):
+                                metrics[f"reward_extra/{key}/mean"] = float(np.mean(values_arr))
+                                metrics[f"reward_extra/{key}/max"] = float(np.max(values_arr))
+                                metrics[f"reward_extra/{key}/min"] = float(np.min(values_arr))
+                        except (TypeError, ValueError):
+                            # Skip non-numeric values
+                            pass
 
                 # this is experimental and may be changed/removed in the future in favor of a general-purpose one
                 if isinstance(self.train_dataloader.sampler, AbstractCurriculumSampler):
