@@ -65,6 +65,10 @@ class HFModelConfig(BaseConfig):
     # custom chat template for the model
     custom_chat_template: Optional[str] = None
 
+    # path to a jinja2 chat template file for the model
+    # (preferred over passing the raw template string via hydra CLI overrides)
+    custom_chat_template_path: Optional[str] = None
+
     external_lib: Optional[str] = None
 
     override_config: dict = field(default_factory=dict)
@@ -113,11 +117,17 @@ class HFModelConfig(BaseConfig):
             self.tokenizer = hf_tokenizer(self.local_tokenizer_path, trust_remote_code=self.trust_remote_code)
             self.processor = hf_processor(self.local_tokenizer_path, trust_remote_code=self.trust_remote_code)
 
-        if self.custom_chat_template is not None:
+        template = self.custom_chat_template
+        if template is None and self.custom_chat_template_path is not None:
+            template_path = copy_to_local(self.custom_chat_template_path, use_shm=False)
+            with open(template_path, "r", encoding="utf-8") as f:
+                template = f.read()
+
+        if template is not None:
             if self.processor is not None:
-                self.processor.chat_template = self.custom_chat_template
+                self.processor.chat_template = template
             else:
-                self.tokenizer.chat_template = self.custom_chat_template
+                self.tokenizer.chat_template = template
 
         self.local_hf_config_path = copy_to_local(self.hf_config_path, use_shm=self.use_shm)
         self.generation_config = get_generation_config(

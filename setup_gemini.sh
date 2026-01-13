@@ -11,7 +11,12 @@ MAX_JOB=32 pip install -v --disable-pip-version-check --no-cache-dir --no-build-
 cd ..
 # Avoid PEP517 build isolation downloading build deps from index (which may be flaky/misconfigured).
 pip install --no-deps --no-build-isolation -e .
+# 修复qwen3_vl找不到的问题
 pip install --upgrade transformers
 pip uninstall mbridge -y
 pip install git+https://github.com/ISEEKYAN/mbridge.git@qwen3vl_cp
+# vllm引擎依赖numpy<=2.2.x
+pip install numpy==2.2.0
+# for debug
+pip install "debugpy==1.8.0"
 pip install ipdb

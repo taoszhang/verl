@@ -56,7 +56,8 @@ def call_search_api(
     """
     request_id = str(uuid.uuid4())
     log_prefix = f"[Search Request ID: {request_id}] "
-
+    # add no proxy
+    proxies={"http": None, "https": None}
     payload = {"queries": query_list, "topk": topk, "return_scores": return_scores}
 
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
@@ -73,6 +74,7 @@ def call_search_api(
                 headers=headers,
                 json=payload,
                 timeout=timeout,
+                proxies=proxies,
             )
 
             # Check for Gateway Timeout (504) and other server errors for retrying

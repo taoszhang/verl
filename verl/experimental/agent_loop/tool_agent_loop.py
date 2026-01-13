@@ -171,6 +171,7 @@ class ToolAgentLoop(AgentLoopBase):
         )
 
         # State machine loop
+        # 多轮对话引擎，找状态，然后执行对应的逻辑。
         state = AgentState.PENDING
         while state != AgentState.TERMINATED:
             if state == AgentState.PENDING:
@@ -233,7 +234,7 @@ class ToolAgentLoop(AgentLoopBase):
                 image_data=agent_data.image_data,
                 video_data=agent_data.video_data,
             )
-
+        # 实现response mask，
         agent_data.assistant_turns += 1
         agent_data.response_ids = output.token_ids
         agent_data.prompt_ids += agent_data.response_ids
@@ -270,12 +271,12 @@ class ToolAgentLoop(AgentLoopBase):
             return AgentState.INTERACTING
         else:
             return AgentState.TERMINATED
-
+    
+    # 处理工具调用的结果
     async def _handle_processing_tools_state(self, agent_data: AgentData) -> AgentState:
         """Handle the processing tools state: execute tool calls and prepare tool responses."""
         add_messages: list[dict[str, Any]] = []
         new_images_this_turn: list[Any] = []  # Local variable instead of agent_data attribute
-
         tasks = []
         tool_call_names = []
         for tool_call in agent_data.tool_calls[: self.max_parallel_calls]:
@@ -284,7 +285,6 @@ class ToolAgentLoop(AgentLoopBase):
 
         with simple_timer("tool_calls", agent_data.metrics):
             responses = await asyncio.gather(*tasks)
-
         # Process tool responses and update multi_modal_data
         # Removed: agent_data.new_images_this_turn = []
         for tool_response, tool_reward, _ in responses:
@@ -336,7 +336,6 @@ class ToolAgentLoop(AgentLoopBase):
                 agent_data.tool_rewards.append(tool_reward)
 
         agent_data.messages.extend(add_messages)
-
         if self.tool_parser_name == "gpt-oss":
             logger.info("manually format tool responses for gpt-oss")
             tool_response_text = build_gpt_oss_tool_response_text(add_messages, tool_call_names)
@@ -346,7 +345,8 @@ class ToolAgentLoop(AgentLoopBase):
         else:
             response_ids = await self.apply_chat_template(
                 add_messages,
-                images=new_images_this_turn,  # Using local variable
+                # images=new_images_this_turn,  # Using local variable
+                images=(new_images_this_turn if new_images_this_turn else None),
                 videos=None,
                 remove_system_prompt=True,
             )
@@ -362,7 +362,7 @@ class ToolAgentLoop(AgentLoopBase):
                 agent_data.image_data = [agent_data.image_data]
             for img in new_images_this_turn:
                 agent_data.image_data.append(img)
-
+        # 工具调用的结果被mask掉
         agent_data.prompt_ids += response_ids
         agent_data.response_mask += [0] * len(response_ids)
         if agent_data.response_logprobs:

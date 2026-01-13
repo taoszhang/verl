@@ -1717,6 +1717,15 @@ class RayPPOTrainer:
                 metrics.update(compute_variance_proxy_metrics(batch=batch, gradient_norm=gradient_norm))
                 # Note: mismatch metrics (KL, PPL, etc.) are collected at line 1179 after advantage computation
 
+                # log reward extra info metrics (e.g., format, tool_call, accuracy from compute_score)
+                if reward_extra_infos_dict:
+                    for key, values in reward_extra_infos_dict.items():
+                        if values and isinstance(values[0], (int, float)):
+                            values_arr = np.array(values)
+                            metrics[f"reward_extra/{key}/mean"] = float(np.mean(values_arr))
+                            metrics[f"reward_extra/{key}/max"] = float(np.max(values_arr))
+                            metrics[f"reward_extra/{key}/min"] = float(np.min(values_arr))
+
                 # this is experimental and may be changed/removed in the future in favor of a general-purpose one
                 if isinstance(self.train_dataloader.sampler, AbstractCurriculumSampler):
                     self.train_dataloader.sampler.update(batch=batch)

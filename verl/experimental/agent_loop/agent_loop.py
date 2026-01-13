@@ -263,7 +263,13 @@ class AgentLoopBase(ABC):
         Returns:
             list[int]: Prompt token ids.
         """
+        # 传空列表的时候，有可能会出现index error，这里设置为None
+        if images is not None and len(images) == 0:
+            images = None
+        if videos is not None and len(videos) == 0:
+            videos = None
         if self.processor is not None:
+            # 在这里，通过jinja模板，将messages转换为raw_prompt，想要自定义XML需要改jinja模板
             raw_prompt = await self.loop.run_in_executor(
                 None,
                 lambda: self.processor.apply_chat_template(
@@ -274,7 +280,6 @@ class AgentLoopBase(ABC):
                     **self.apply_chat_template_kwargs,
                 ),
             )
-
             # split the videos and according metadatas
             if videos is not None:
                 videos, video_metadatas = zip(*videos, strict=False)
@@ -377,10 +382,19 @@ class AgentLoopWorker:
             agent_loop_configs = OmegaConf.load(resolved_path)
             for agent_loop_config in agent_loop_configs:
                 _agent_loop_registry[agent_loop_config.name] = agent_loop_config
-        if self.config.actor_rollout_ref.model.get("custom_chat_template", None) is not None:
+        # Support configuring custom chat template via either an inline string or a file path.
+        template = self.config.actor_rollout_ref.model.get("custom_chat_template", None)
+        if template is None:
+            template_path = self.config.actor_rollout_ref.model.get("custom_chat_template_path", None)
+            if template_path:
+                local_template_path = copy_to_local(template_path, use_shm=False)
+                with open(local_template_path, "r", encoding="utf-8") as f:
+                    template = f.read()
+
+        if template is not None:
             if self.processor is not None:
-                self.processor.chat_template = self.config.actor_rollout_ref.model.custom_chat_template
-            self.tokenizer.chat_template = self.config.actor_rollout_ref.model.custom_chat_template
+                self.processor.chat_template = template
+            self.tokenizer.chat_template = template
 
         use_reward_loop = True if self.config.reward_model.use_reward_loop else None
         self.use_reward_loop = use_reward_loop
@@ -520,6 +534,38 @@ class AgentLoopWorker:
         output.extra_fields["raw_prompt"] = kwargs["raw_prompt"]
 
         # Some AgentLoop may have already computed the reward score, e.g SWE-agent.
+        # Hard length constraints (token-level) for robustness.
+        #
+        # NOTE:
+        # - HF tokenizer.pad(padding="max_length", max_length=...) does NOT truncate sequences longer than max_length.
+        # - If any sample has prompt/response longer than configured lengths, batch torch.cat will fail in _postprocess.
+        #
+        # We enforce:
+        # - prompt_ids: left truncation (keep the most recent tokens).
+        # - response_ids / response_mask / response_logprobs: right truncation (keep earliest response tokens).
+        prompt_len = int(self.config.actor_rollout_ref.rollout.prompt_length)
+        resp_len = int(self.config.actor_rollout_ref.rollout.response_length)
+
+        # Initialize truncation fields to 0 for ALL samples (required for batch concat consistency)
+        output.extra_fields["prompt_truncated_tokens"] = 0
+        output.extra_fields["response_truncated_tokens"] = 0
+
+        if output.prompt_ids is not None and len(output.prompt_ids) > prompt_len:
+            # Keep the most recent context for agent-loop style rollouts.
+            truncated = len(output.prompt_ids) - prompt_len
+            output.prompt_ids = output.prompt_ids[-prompt_len:]
+            output.extra_fields["prompt_truncated_tokens"] = truncated
+
+        if output.response_ids is not None and len(output.response_ids) > resp_len:
+            truncated = len(output.response_ids) - resp_len
+            output.response_ids = output.response_ids[:resp_len]
+            output.extra_fields["response_truncated_tokens"] = truncated
+
+        if output.response_mask is not None and len(output.response_mask) > resp_len:
+            output.response_mask = output.response_mask[:resp_len]
+
+        if output.response_logprobs is not None and len(output.response_logprobs) > resp_len:
+            output.response_logprobs = output.response_logprobs[:resp_len]
 
         # NOTE: consistent with the legacy batch version of generate_sequences that existed in the
         # deprecated vLLM SPMD rollout implementation.
@@ -941,7 +987,6 @@ class AgentLoopManager:
 
         chunkes = prompts.chunk(len(self.agent_loop_workers))
         # breakpoint()
-        # import ipdb; ipdb.set_trace()
         outputs = ray.get(
             [
                 worker.generate_sequences.remote(chunk)

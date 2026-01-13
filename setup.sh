@@ -15,8 +15,8 @@ ln -sf /usr/include/cudnn*.h /usr/local/cuda/include/
 ln -sf /usr/lib64/libcudnn* /usr/local/cuda/lib64/
 ls -l /usr/local/cuda/include/cudnn.h
 
-# export http_proxy=http://9.131.113.25:11113
-# export https_proxy=http://9.131.113.25:11113
+export http_proxy=http://9.131.113.25:11113
+export https_proxy=http://9.131.113.25:11113
 
 conda create -n verl python==3.12 -y
 conda activate verl

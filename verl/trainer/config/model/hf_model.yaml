@@ -24,6 +24,9 @@ trust_remote_code: False
 # custom chat template for the model
 custom_chat_template: null
 
+# path to a jinja2 chat template file for the model
+custom_chat_template_path: null
+
 # whether to use external libs for the model
 external_lib: null
 

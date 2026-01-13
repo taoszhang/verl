@@ -22,3 +22,6 @@ actor_rollout_ref:
       enable: True
       max_assistant_turns: 2
       format: hermes
+  val_kwargs:
+    n: 1
+    do_sample: False
